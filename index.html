@@ -26,6 +26,9 @@
 </head>
 
 <body>
+    <!-- Connection Status Indicator -->
+    <div id="connectionStatus" class="connection-status">🟢 Online</div>
+
     <!-- Floating Hearts Background -->
     <div class="floating-hearts" id="floatingHearts"></div>
 
@@ -328,6 +331,39 @@
     <!-- Audio Element -->
     <audio id="mainAudio"></audio>
 
+    <!-- Upload Loading Overlay -->
+    <div class="upload-overlay" id="uploadOverlay" style="display:none;">
+        <div class="upload-overlay-content">
+            <div class="upload-spinner"></div>
+            <p class="upload-text" id="uploadText">Mengupload... 💕</p>
+            <div class="upload-progress-bar">
+                <div class="upload-progress-fill" id="uploadProgressFill"></div>
+            </div>
+            <span class="upload-percent" id="uploadPercent">0%</span>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Compat - works with regular scripts) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyC-UZsqAFBfvoWDCLM7MtcchcYufEGVIQY",
+            authDomain: "jeysenn.firebaseapp.com",
+            projectId: "jeysenn",
+            storageBucket: "jeysenn.firebasestorage.app",
+            messagingSenderId: "91133406128",
+            appId: "1:91133406128:web:5195c586e8adc7a0f18475",
+            measurementId: "G-B90FMSXSYL"
+        };
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+    </script>
+
     <script src="script.js"></script>
 
     <!-- Service Worker Registration -->
@@ -340,6 +376,7 @@
             });
         }
     </script>
+
 </body>
 
 </html>

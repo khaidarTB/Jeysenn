@@ -75,6 +75,43 @@ body {
 }
 
 /* ============================
+   Connection Status Indicator
+   ============================ */
+.connection-status {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(236, 72, 153, 0.2);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.3s ease;
+}
+
+.connection-status.offline {
+    background: rgba(255, 107, 107, 0.1);
+    color: #dc2626;
+}
+
+.connection-status.syncing {
+    background: rgba(251, 146, 60, 0.1);
+    color: #f97316;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* ============================
    Floating Hearts Background
    ============================ */
 .floating-hearts {

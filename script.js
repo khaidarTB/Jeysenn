@@ -1,7 +1,102 @@
 /* ============================
    💕 For My Love - JavaScript 💕
-   Menggabungkan sistem CRUD Jeysen dengan visual CuteSpace
+   Menggabungkan sistem CRUD Jeysen dengan visual CuteSpace (Firebase Realtime Pro)
    ============================ */
+
+// ============================
+//  GLOBAL CONNECTION STATE & CONFIG
+// ============================
+let isOnline = navigator.onLine;
+let firestoreConnected = true;
+
+// File size limits (in MB)
+const FILE_LIMITS = {
+    image: 5,
+    video: 20,
+    audio: 10
+};
+
+// Monitor connection status
+window.addEventListener('online', () => {
+    isOnline = true;
+    updateConnectionStatus();
+    showToast('Koneksi kembali! 🟢', '🔌');
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    updateConnectionStatus();
+    showToast('Mode offline - data tersimpan lokal 💾', '🔌');
+});
+
+// Setup Firestore offline persistence
+if (typeof firebase !== 'undefined' && typeof db !== 'undefined') {
+    firebase.firestore().enablePersistence()
+        .catch((err) => {
+            if (err.code === 'failed-precondition') {
+                console.log('Multiple tabs open, persistence only in one tab');
+            } else if (err.code === 'unimplemented') {
+                console.log('Browser not supported for persistence');
+            }
+        });
+}
+
+// Monitor Firestore connection status
+if (typeof db !== 'undefined') {
+    db.collection('_status').doc('heartbeat').onSnapshot(
+        (doc) => {
+            firestoreConnected = true;
+            updateConnectionStatus();
+        },
+        (error) => {
+            if (error.code !== 'permission-denied') {
+                firestoreConnected = false;
+            }
+            updateConnectionStatus();
+        }
+    );
+}
+
+function updateConnectionStatus() {
+    const statusEl = document.getElementById('connectionStatus');
+    if (statusEl) {
+        if (isOnline && firestoreConnected) {
+            statusEl.innerHTML = '🟢 Online';
+            statusEl.classList.remove('offline');
+            statusEl.classList.remove('syncing');
+        } else if (isOnline) {
+            statusEl.innerHTML = '🟡 Sync...';
+            statusEl.classList.add('syncing');
+            statusEl.classList.remove('offline');
+        } else {
+            statusEl.innerHTML = '🔴 Offline';
+            statusEl.classList.add('offline');
+            statusEl.classList.remove('syncing');
+        }
+    }
+}
+
+// ============================
+//  FILE VALIDATION
+// ============================
+function validateFileSize(file, type) {
+    const maxSizeMB = FILE_LIMITS[type] || 5;
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    
+    if (file.size > maxSizeBytes) {
+        showToast(`File terlalu besar! Max ${maxSizeMB}MB`, '❌');
+        return false;
+    }
+    return true;
+}
+
+function validateFileType(file, allowedTypes) {
+    if (!allowedTypes.some(type => file.type.startsWith(type))) {
+        showToast('Tipe file tidak didukung! 📁', '❌');
+        return false;
+    }
+    return true;
+}
 
 // ============================
 //  FLOATING HEARTS
@@ -20,9 +115,7 @@ function initFloatingHearts() {
         container.appendChild(heart);
         setTimeout(() => heart.remove(), 22000);
     }
-    // Initial wave
     for (let i = 0; i < 8; i++) setTimeout(spawnHeart, i * 600);
-    // Continuous
     setInterval(spawnHeart, 2500);
 }
 
@@ -30,11 +123,9 @@ function initFloatingHearts() {
 //  NAVIGATION (SPA)
 // ============================
 function showSection(sectionId) {
-    // Sembunyikan semua page
     const pages = document.querySelectorAll('.page');
     pages.forEach(p => p.classList.remove('active'));
 
-    // Tampilkan page yang dipilih (mapping dari ID Jeysen ke ID structure baru)
     let pageElementId = 'pageLanding';
     if (sectionId === 'messages') pageElementId = 'pageMessages';
     if (sectionId === 'gallery') pageElementId = 'pageGallery';
@@ -48,7 +139,7 @@ function showSection(sectionId) {
 }
 
 // ============================
-//  MODALS
+//  MODALS & OVERLAYS
 // ============================
 function openModal(id) {
     const modal = document.getElementById(id);
@@ -64,7 +155,6 @@ function closeModal(id) {
         modal.classList.remove('active');
         document.body.style.overflow = '';
     }
-    // Hentikan video jika lightbox ditutup
     if (id === 'modalViewGallery') {
         const container = document.getElementById('modalMediaContainer');
         container.innerHTML = '';
@@ -72,27 +162,38 @@ function closeModal(id) {
 }
 
 function initModals() {
-    // Click outside
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeModal(overlay.id);
-            }
+            if (e.target === overlay) closeModal(overlay.id);
         });
     });
 
-    // Escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            document.querySelectorAll('.modal-overlay.active').forEach(m => {
-                closeModal(m.id);
-            });
+            document.querySelectorAll('.modal-overlay.active').forEach(m => closeModal(m.id));
         }
     });
 }
 
+function showUploadOverlay(text = "Mengupload... 💕") {
+    document.getElementById('uploadText').textContent = text;
+    document.getElementById('uploadPercent').textContent = "0%";
+    document.getElementById('uploadProgressFill').style.width = "0%";
+    document.getElementById('uploadOverlay').style.display = 'flex';
+}
+
+function hideUploadOverlay() {
+    document.getElementById('uploadOverlay').style.display = 'none';
+}
+
+function updateUploadProgress(percent) {
+    const p = Math.round(percent);
+    document.getElementById('uploadPercent').textContent = p + "%";
+    document.getElementById('uploadProgressFill').style.width = p + "%";
+}
+
 // ============================
-//  TOAST
+//  TOAST & UTILS
 // ============================
 function showToast(message, icon = '✅') {
     const container = document.getElementById('toastContainer');
@@ -106,7 +207,6 @@ function showToast(message, icon = '✅') {
     }, 3000);
 }
 
-// Get TimeStamp Now
 function getTimeStamp() {
     const now = new Date();
     return now.toLocaleString('id-ID', {
@@ -135,12 +235,13 @@ function escapeHtml(unsafe) {
 }
 
 // ============================
-//  1. SECRET MESSAGES (LocalStorage Persisten)
+//  1. SECRET MESSAGES (Firebase Firestore - Realtime)
 // ============================
-let messagesData = JSON.parse(localStorage.getItem('jeysenn_cute_messages')) || [];
+let messagesData = [];
 let selectedStickers = ['💕'];
 let selectedColor = 'pink';
 let currentViewMsgIndex = null;
+let messagesListener = null;
 
 function renderMessages() {
     const grid = document.getElementById('msgGrid');
@@ -159,9 +260,8 @@ function renderMessages() {
         const card = document.createElement('div');
         card.className = 'envelope-card';
         card.style.background = COLOR_GRADIENTS[msg.color] || COLOR_GRADIENTS.pink;
-        card.style.animationDelay = `${index * 0.1}s`;
+        card.style.animationDelay = `${(index % 10) * 0.1}s`;
 
-        // Support backward compatibility if msg.sticker is a string
         let mainSticker = '💌';
         if (Array.isArray(msg.stickers) && msg.stickers.length > 0) {
             mainSticker = msg.stickers[0];
@@ -170,15 +270,13 @@ function renderMessages() {
         }
 
         card.innerHTML = `
-            <button class="del-btn" onclick="deleteMessage(${index}, event)" title="Hapus">✕</button>
+            <button class="del-btn" onclick="deleteMessage('${msg.id}', event)" title="Hapus">✕</button>
             <div class="envelope-icon">${mainSticker}</div>
             <div class="envelope-label">Buka Surat 💕</div>
         `;
 
         card.onclick = (e) => {
-            if (!e.target.classList.contains('del-btn')) {
-                openMsgModal(index);
-            }
+            if (!e.target.classList.contains('del-btn')) openMsgModal(index);
         };
         grid.appendChild(card);
     });
@@ -186,14 +284,11 @@ function renderMessages() {
 
 function initMessages() {
     const btnAdd = document.getElementById('btnAddMessage');
-    const form = document.getElementById('formAddMessage');
 
-    // Sticker picker (toggle multiple)
     document.querySelectorAll('#stickerPicker .sticker-option').forEach(btn => {
         btn.addEventListener('click', () => {
             const sticker = btn.getAttribute('data-sticker');
             if (btn.classList.contains('selected')) {
-                // Remove if there's more than 1 selected (don't allow 0 stickers)
                 if (selectedStickers.length > 1) {
                     btn.classList.remove('selected');
                     selectedStickers = selectedStickers.filter(s => s !== sticker);
@@ -205,7 +300,6 @@ function initMessages() {
         });
     });
 
-    // Color picker
     document.querySelectorAll('#colorPicker .color-option').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('#colorPicker .color-option').forEach(b => b.classList.remove('selected'));
@@ -216,7 +310,6 @@ function initMessages() {
 
     btnAdd.addEventListener('click', () => {
         document.getElementById('msgInput').value = '';
-        // Reset selections
         selectedStickers = ['💕'];
         selectedColor = 'pink';
         document.querySelectorAll('#stickerPicker .sticker-option').forEach(b => {
@@ -225,18 +318,39 @@ function initMessages() {
         });
         document.querySelectorAll('#colorPicker .color-option').forEach(b => b.classList.remove('selected'));
         document.querySelector('#colorPicker .color-option[data-color="pink"]').classList.add('selected');
-
         openModal('modalAddMessage');
     });
 
     document.getElementById('btnDeleteMsgFromModal').addEventListener('click', () => {
         if (currentViewMsgIndex !== null) {
-            deleteMessage(currentViewMsgIndex, { stopPropagation: () => { } });
+            const id = messagesData[currentViewMsgIndex].id;
+            deleteMessage(id, { stopPropagation: () => { } });
             closeModal('modalViewMessage');
         }
     });
 
-    renderMessages();
+    // Realtime Firestore listener
+    if (messagesListener) messagesListener();
+    
+    messagesListener = db.collection('messages')
+        .orderBy('timestamp', 'desc')
+        .limit(100)
+        .onSnapshot(
+            (snapshot) => {
+                messagesData = [];
+                snapshot.forEach(doc => {
+                    messagesData.push({ id: doc.id, ...doc.data() });
+                });
+                renderMessages();
+                updateConnectionStatus();
+            },
+            (error) => {
+                console.error("Error fetching messages:", error);
+                if (error.code !== 'permission-denied') {
+                    showToast('Gagal load pesan: ' + error.message, '⚠️');
+                }
+            }
+        );
 }
 
 function addMessage() {
@@ -248,83 +362,77 @@ function addMessage() {
         return;
     }
 
-    messagesData.unshift({
+    if (text.length > 1000) {
+        showToast('Pesan terlalu panjang max 1000 karakter! 📝', '❌');
+        return;
+    }
+
+    if (!isOnline) {
+        showToast('Pesan akan ter-save setelah online! 💾', '⚠️');
+    }
+
+    db.collection('messages').add({
         text: text,
         stickers: [...selectedStickers],
         color: selectedColor,
-        time: getTimeStamp()
+        time: getTimeStamp(),
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(() => {
+        showToast('Pesan rahasia berhasil dikirim! 💌', '💌');
+        input.value = '';
+        closeModal('modalAddMessage');
+    }).catch(error => {
+        console.error("Add message error:", error);
+        showToast('Gagal mengirim pesan: ' + error.message, '❌');
     });
-
-    localStorage.setItem('jeysenn_cute_messages', JSON.stringify(messagesData));
-    showToast('Pesan rahasia berhasil dikirim! 💌', '💌');
-    closeModal('modalAddMessage');
-    renderMessages();
 }
 
-function deleteMessage(index, event) {
+function deleteMessage(id, event) {
     event.stopPropagation();
     if (confirm("Hapus surat ini?")) {
-        messagesData.splice(index, 1);
-        localStorage.setItem('jeysenn_cute_messages', JSON.stringify(messagesData));
-        showToast('Pesan dihapus~', '🗑️');
-        renderMessages();
+        db.collection('messages').doc(id).delete()
+            .then(() => showToast('Pesan dihapus~', '🗑️'))
+            .catch(error => showToast('Gagal menghapus: ' + error.message, '❌'));
     }
 }
 
 function openMsgModal(index) {
     const msg = messagesData[index];
     currentViewMsgIndex = index;
-
     const bg = COLOR_GRADIENTS[msg.color] || COLOR_GRADIENTS.pink;
 
-    // Fallback for old data or default
-    let stickersArr = ['💕'];
-    if (Array.isArray(msg.stickers) && msg.stickers.length > 0) {
-        stickersArr = msg.stickers;
-    } else if (msg.sticker) {
-        stickersArr = [msg.sticker];
-    }
+    let stickersArr = Array.isArray(msg.stickers) && msg.stickers.length > 0 ? msg.stickers : (msg.sticker ? [msg.sticker] : ['💕']);
 
-    // Update contents
     document.getElementById('modalMsgText').innerHTML = escapeHtml(msg.text);
     document.getElementById('viewMsgBody').style.background = 'transparent';
     document.querySelector('#modalViewMessage .modal-view-message').style.background = bg;
     document.getElementById('viewMsgBigSticker').textContent = stickersArr[Math.floor(Math.random() * stickersArr.length)];
 
-    // Generate floating particles
     const particlesContainer = document.getElementById('modalStickerParticles');
     particlesContainer.innerHTML = '';
-
-    // Create 15-25 random floating stickers
     const particleCount = 15 + Math.floor(Math.random() * 10);
     for (let i = 0; i < particleCount; i++) {
         const particle = document.createElement('span');
         particle.className = 'modal-floating-sticker';
         particle.textContent = stickersArr[Math.floor(Math.random() * stickersArr.length)];
-
-        // Randomize position, duration, and delay inside modal
         particle.style.left = (Math.random() * 90 + 5) + '%';
         particle.style.top = (Math.random() * 90 + 5) + '%';
         particle.style.animationDuration = (3 + Math.random() * 4) + 's';
         particle.style.animationDelay = (Math.random() * 2) + 's';
-        const size = (20 + Math.random() * 30) + 'px';
-        particle.style.fontSize = size;
-
-        // Custom animation variables for CSS
+        particle.style.fontSize = (20 + Math.random() * 30) + 'px';
         particle.style.setProperty('--r', Math.random().toFixed(2));
         particle.style.setProperty('--r2', Math.random().toFixed(2));
-
         particlesContainer.appendChild(particle);
     }
-
     openModal('modalViewMessage');
 }
 
 // ============================
-//  2. GALERI KENANGAN (CRUD Sesi - URL.createObjectURL)
+//  2. GALERI KENANGAN (Firebase Storage + Firestore - Realtime)
 // ============================
 let galleryData = [];
 let currentGalleryFile = null;
+let galleryListener = null;
 
 function renderGallery() {
     const grid = document.getElementById('galleryGrid');
@@ -340,7 +448,7 @@ function renderGallery() {
     grid.innerHTML = galleryData.map((item, index) => {
         const isVideo = item.type.startsWith('video');
         return `
-            <div class="gallery-card" style="animation-delay:${index * 0.1}s" onclick="openGalleryModal(${index})">
+            <div class="gallery-card" style="animation-delay:${(index % 10) * 0.1}s" onclick="openGalleryModal(${index})">
                 <div class="gallery-card-media-container">
                     ${isVideo
                 ? `<video class="gallery-card-media" src="${item.url}" muted preload="metadata"></video>
@@ -353,7 +461,7 @@ function renderGallery() {
                     <div class="gallery-card-caption">${escapeHtml(item.caption || '✨ Kenangan Indah ✨')}</div>
                     <div class="gallery-card-timestamp">📅 Abadi pada: ${item.time}</div>
                 </div>
-                <button class="gallery-del-btn" onclick="deleteGallery(${index}, event)" title="Hapus">✕</button>
+                <button class="gallery-del-btn" onclick="deleteGallery('${item.id}', event)" title="Hapus">✕</button>
             </div>
         `;
     }).join('');
@@ -378,13 +486,32 @@ function initGallery() {
 
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            currentGalleryFile = fileInput.files[0];
-            const url = URL.createObjectURL(currentGalleryFile);
+            const file = fileInput.files[0];
+            
+            // Validate file type
+            const isImage = file.type.startsWith('image');
+            const isVideo = file.type.startsWith('video');
+            
+            if (!isImage && !isVideo) {
+                showToast('Hanya foto atau video yang didukung! 📸', '❌');
+                fileInput.value = '';
+                return;
+            }
+
+            // Validate file size
+            const type = isImage ? 'image' : 'video';
+            if (!validateFileSize(file, type)) {
+                fileInput.value = '';
+                return;
+            }
+
+            currentGalleryFile = file;
+            const url = URL.createObjectURL(file);
 
             uploadArea.style.display = 'none';
             preview.style.display = 'block';
 
-            if (currentGalleryFile.type.startsWith('video')) {
+            if (isVideo) {
                 previewImg.style.display = 'none';
                 previewVid.style.display = 'block';
                 previewVid.src = url;
@@ -398,7 +525,28 @@ function initGallery() {
 
     previewRemove.addEventListener('click', resetGalleryPreview);
 
-    renderGallery();
+    // Realtime Firestore listener
+    if (galleryListener) galleryListener();
+    
+    galleryListener = db.collection('gallery')
+        .orderBy('timestamp', 'desc')
+        .limit(100)
+        .onSnapshot(
+            (snapshot) => {
+                galleryData = [];
+                snapshot.forEach(doc => {
+                    galleryData.push({ id: doc.id, ...doc.data() });
+                });
+                renderGallery();
+                updateConnectionStatus();
+            },
+            (error) => {
+                console.error("Error fetching gallery:", error);
+                if (error.code !== 'permission-denied') {
+                    showToast('Gagal load galeri: ' + error.message, '⚠️');
+                }
+            }
+        );
 }
 
 function resetGalleryPreview() {
@@ -419,26 +567,64 @@ function addMedia() {
         return;
     }
 
-    const url = URL.createObjectURL(currentGalleryFile);
+    const file = currentGalleryFile;
+    const filename = `gallery_${Date.now()}_${file.name}`;
+    const uploadTask = storage.ref(`gallery/${filename}`).put(file);
 
-    galleryData.unshift({
-        url: url,
-        type: currentGalleryFile.type,
-        caption: captionInput.value,
-        time: getTimeStamp()
-    });
+    showUploadOverlay('Mengupload Kenangan... 📸');
 
-    showToast('Kenangan baru ditambahkan! 📸', '📸');
-    closeModal('modalAddGallery');
-    renderGallery();
+    uploadTask.on('state_changed',
+        (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            updateUploadProgress(progress);
+        },
+        (error) => {
+            hideUploadOverlay();
+            console.error("Upload error:", error);
+            showToast('Gagal upload file: ' + error.message, '❌');
+        },
+        () => {
+            uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
+                db.collection('gallery').add({
+                    url: downloadURL,
+                    type: file.type,
+                    caption: captionInput.value.trim(),
+                    time: getTimeStamp(),
+                    filename: filename,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => {
+                    hideUploadOverlay();
+                    showToast('Kenangan baru ditambahkan! 📸', '📸');
+                    resetGalleryPreview();
+                    closeModal('modalAddGallery');
+                }).catch(err => {
+                    hideUploadOverlay();
+                    console.error("Add gallery error:", err);
+                    showToast('Gagal simpan data: ' + err.message, '❌');
+                });
+            }).catch(err => {
+                hideUploadOverlay();
+                console.error("Get URL error:", err);
+                showToast('Gagal get download URL: ' + err.message, '❌');
+            });
+        }
+    );
 }
 
-function deleteGallery(index, event) {
+function deleteGallery(id, event) {
     event.stopPropagation();
     if (confirm("Hapus kenangan ini?")) {
-        galleryData.splice(index, 1);
-        showToast('Kenangan dihapus~', '🗑️');
-        renderGallery();
+        const item = galleryData.find(g => g.id === id);
+        if (item && item.filename) {
+            storage.ref(`gallery/${item.filename}`).delete()
+                .catch(e => console.log('Storage delete error:', e));
+        }
+        db.collection('gallery').doc(id).delete()
+            .then(() => {
+                showToast('Kenangan dihapus~', '🗑️');
+                closeModal('modalViewGallery');
+            })
+            .catch(error => showToast('Gagal menghapus: ' + error.message, '❌'));
     }
 }
 
@@ -455,17 +641,20 @@ function openGalleryModal(index) {
     document.getElementById('modalMediaCaption').innerText = escapeHtml(item.caption || '✨ Kenangan Indah ✨');
     document.getElementById('modalMediaTime').innerText = `Abadi pada: ${item.time}`;
 
+    document.getElementById('btnDeleteGallery').onclick = (e) => deleteGallery(item.id, e);
+
     openModal('modalViewGallery');
 }
 
 // ============================
-//  3. PLAYLIST CINTA (CRUD Sesi - Custom Cute Player)
+//  3. PLAYLIST CINTA (Firebase Storage + Firestore - Realtime)
 // ============================
 let playlistData = [];
 let audioPlayer = null;
 let currentSongIndex = -1;
 let isPlaying = false;
 let currentSongFile = null;
+let playlistListener = null;
 
 function renderPlaylist() {
     const list = document.getElementById('playlistGrid');
@@ -483,7 +672,7 @@ function renderPlaylist() {
     playerUI.style.display = 'block';
 
     list.innerHTML = playlistData.map((song, i) => `
-        <div class="playlist-item ${i === currentSongIndex ? 'active' : ''}" onclick="playSong(${i})" style="animation-delay:${i * 0.08}s">
+        <div class="playlist-item ${i === currentSongIndex ? 'active' : ''}" onclick="playSong(${i})" style="animation-delay:${(i % 10) * 0.08}s">
             <span class="playlist-item-num">${i === currentSongIndex && isPlaying ? '🎵' : (i + 1)}</span>
             <div class="playlist-item-icon">${i === currentSongIndex && isPlaying ? '🎶' : '🎵'}</div>
             <div class="playlist-item-info">
@@ -491,7 +680,7 @@ function renderPlaylist() {
                 <div class="playlist-item-artist">Our special playlist</div>
             </div>
             <div class="playlist-item-actions">
-                <button class="playlist-item-btn" onclick="deleteSong(${i}, event)" title="Hapus">🗑️</button>
+                <button class="playlist-item-btn" onclick="deleteSong('${song.id}', event)" title="Hapus">🗑️</button>
             </div>
         </div>
     `).join('');
@@ -510,25 +699,39 @@ function initPlaylist() {
     const btnPrev = document.getElementById('btnPrev');
     const progressBar = document.getElementById('progressBar');
 
-    // Add button
     btnAdd.addEventListener('click', () => {
         document.getElementById('songName').value = '';
         resetSongPreview();
         openModal('modalAddSong');
     });
 
-    // File handling
     uploadArea.addEventListener('click', () => fileInput.click());
+    
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            currentSongFile = fileInput.files[0];
-            fileName.textContent = currentSongFile.name;
+            const file = fileInput.files[0];
+            
+            // Validate file type
+            if (!file.type.startsWith('audio')) {
+                showToast('Hanya file audio yang didukung! 🎵', '❌');
+                fileInput.value = '';
+                return;
+            }
+
+            // Validate file size
+            if (!validateFileSize(file, 'audio')) {
+                fileInput.value = '';
+                return;
+            }
+
+            currentSongFile = file;
+            fileName.textContent = file.name;
             uploadArea.style.display = 'none';
             fileSelected.style.display = 'flex';
 
             const nameInput = document.getElementById('songName');
             if (!nameInput.value) {
-                nameInput.value = currentSongFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+                nameInput.value = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
             }
         }
     });
@@ -542,13 +745,9 @@ function initPlaylist() {
         fileSelected.style.display = 'none';
     }
 
-    // Player controls
     btnPlay.addEventListener('click', () => {
-        if (currentSongIndex === -1 && playlistData.length > 0) {
-            playSong(0);
-        } else {
-            togglePlay();
-        }
+        if (currentSongIndex === -1 && playlistData.length > 0) playSong(0);
+        else togglePlay();
     });
 
     btnNext.addEventListener('click', () => {
@@ -563,7 +762,6 @@ function initPlaylist() {
         playSong(prev);
     });
 
-    // Progress bar updates
     audioPlayer.addEventListener('timeupdate', () => {
         if (!isNaN(audioPlayer.duration)) {
             const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
@@ -587,7 +785,53 @@ function initPlaylist() {
         }
     });
 
-    renderPlaylist();
+    // Realtime Firestore listener
+    if (playlistListener) playlistListener();
+    
+    playlistListener = db.collection('playlist')
+        .orderBy('timestamp', 'asc')
+        .limit(100)
+        .onSnapshot(
+            (snapshot) => {
+                const newPlaylistData = [];
+                snapshot.forEach(doc => {
+                    newPlaylistData.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Track yang sedang diputar
+                const wasPlayingId = currentSongIndex !== -1 ? playlistData[currentSongIndex]?.id : null;
+                
+                playlistData = newPlaylistData;
+                
+                // Cek kalau lagu yang lagi diputar kehapus
+                if (currentSongIndex >= playlistData.length) {
+                    currentSongIndex = -1;
+                    audioPlayer.pause();
+                    isPlaying = false;
+                }
+                
+                // Update current song index if song still exists
+                if (wasPlayingId) {
+                    const newIndex = playlistData.findIndex(s => s.id === wasPlayingId);
+                    if (newIndex !== -1) {
+                        currentSongIndex = newIndex;
+                    } else {
+                        currentSongIndex = -1;
+                        audioPlayer.pause();
+                        isPlaying = false;
+                    }
+                }
+                
+                renderPlaylist();
+                updateConnectionStatus();
+            },
+            (error) => {
+                console.error("Error fetching playlist:", error);
+                if (error.code !== 'permission-denied') {
+                    showToast('Gagal load playlist: ' + error.message, '⚠️');
+                }
+            }
+        );
 }
 
 function addSong() {
@@ -598,23 +842,65 @@ function addSong() {
         return;
     }
 
-    const url = URL.createObjectURL(currentSongFile);
+    if (nameInput.value.length > 100) {
+        showToast('Nama lagu terlalu panjang max 100 karakter! 🎵', '❌');
+        return;
+    }
 
-    playlistData.push({
-        url: url,
-        name: nameInput.value.trim()
-    });
+    const file = currentSongFile;
+    const filename = `song_${Date.now()}_${file.name}`;
+    const uploadTask = storage.ref(`playlist/${filename}`).put(file);
 
-    showToast('Lagu ditambahkan ke playlist! 🎵', '🎵');
-    closeModal('modalAddSong');
-    renderPlaylist();
+    showUploadOverlay('Mengupload Lagu... 🎵');
+
+    uploadTask.on('state_changed',
+        (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            updateUploadProgress(progress);
+        },
+        (error) => {
+            hideUploadOverlay();
+            console.error("Upload error:", error);
+            showToast('Gagal upload: ' + error.message, '❌');
+        },
+        () => {
+            uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
+                db.collection('playlist').add({
+                    url: downloadURL,
+                    name: nameInput.value.trim(),
+                    filename: filename,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => {
+                    hideUploadOverlay();
+                    showToast('Lagu ditambahkan ke playlist! 🎵', '🎵');
+                    resetSongPreview();
+                    closeModal('modalAddSong');
+                }).catch(err => {
+                    hideUploadOverlay();
+                    console.error("Add song error:", err);
+                    showToast('Gagal simpan data: ' + err.message, '❌');
+                });
+            }).catch(err => {
+                hideUploadOverlay();
+                console.error("Get URL error:", err);
+                showToast('Gagal get download URL: ' + err.message, '❌');
+            });
+        }
+    );
 }
 
-function deleteSong(index, event) {
+function deleteSong(id, event) {
     if (event) event.stopPropagation();
 
     if (confirm("Hapus lagu ini dari playlist?")) {
-        // Jika lagu yang dihapus lagi diputer, stop player
+        const item = playlistData.find(s => s.id === id);
+        if (item && item.filename) {
+            storage.ref(`playlist/${item.filename}`).delete()
+                .catch(e => console.log('Storage delete error:', e));
+        }
+        
+        // Stop if it's currently playing
+        const index = playlistData.findIndex(s => s.id === id);
         if (index === currentSongIndex) {
             audioPlayer.pause();
             audioPlayer.src = '';
@@ -630,9 +916,9 @@ function deleteSong(index, event) {
             currentSongIndex--;
         }
 
-        playlistData.splice(index, 1);
-        showToast('Lagu dihapus dari playlist~', '🗑️');
-        renderPlaylist();
+        db.collection('playlist').doc(id).delete()
+            .then(() => showToast('Lagu dihapus dari playlist~', '🗑️'))
+            .catch(error => showToast('Gagal menghapus: ' + error.message, '❌'));
     }
 }
 
@@ -641,7 +927,7 @@ function playSong(index) {
     currentSongIndex = index;
 
     audioPlayer.src = song.url;
-    audioPlayer.play().catch(e => console.log(e));
+    audioPlayer.play().catch(e => console.log('Playback error:', e));
     isPlaying = true;
 
     document.getElementById('playerTitle').textContent = song.name;
@@ -659,7 +945,7 @@ function togglePlay() {
         document.getElementById('btnPlay').textContent = '▶️';
         document.getElementById('vinylDisc').classList.remove('spinning');
     } else {
-        audioPlayer.play().catch(e => console.log(e));
+        audioPlayer.play().catch(e => console.log('Playback error:', e));
         isPlaying = true;
         document.getElementById('btnPlay').textContent = '⏸️';
         document.getElementById('vinylDisc').classList.add('spinning');
@@ -677,12 +963,12 @@ function formatTime(seconds) {
 // ============================
 //  INISIALISASI AWAL
 // ============================
-window.onload = function () {
+window.addEventListener('load', function () {
     initFloatingHearts();
     initModals();
     initMessages();
     initGallery();
     initPlaylist();
-    // Tampilkan landing page di awal
     showSection('landing');
-};
+    updateConnectionStatus();
+});
